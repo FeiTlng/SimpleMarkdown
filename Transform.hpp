@@ -1,8 +1,5 @@
-//
-// Created by yjd on 2023/1/11.
-//
-
-#ifndef SIMPLEMARKDOWN_MDTRANSFORM_HPP
+#ifndef MD2HTML
+#define MD2HTML
 
 #include <cstdlib>
 #include <fstream>
@@ -17,7 +14,7 @@ using namespace std;
 
 #define maxLength 10000
 
-
+// 词法关键字枚举
 enum
 {
     nul = 0,
@@ -41,50 +38,42 @@ enum
     blockcode = 18,
     code = 19
 };
-
-// html左标签
-const string frontag[] = {
+// HTML 前置标签
+const string frontTag[] = {
         "", "<p>", "", "<ul>", "<ol>", "<li>", "<em>", "<strong>",
         "<hr color=#CCCCCC size=1 />", "<br />",
         "", "<blockquote>",
         "<h1 ", "<h2 ", "<h3 ", "<h4 ", "<h5 ", "<h6 ", // 右边的尖括号预留给添加其他的标签属性
         "<pre><code>", "<code>"
 };
-
-//html右标签
+// HTML 后置标签
 const string backTag[] = {
         "", "</p>", "", "</ul>", "</ol>", "</li>", "</em>", "</strong>",
         "", "", "", "</blockquote>",
         "</h1>", "</h2>", "</h3>", "</h4>", "</h5>", "</h6>",
         "</code></pre>", "</code>"
 };
-
 typedef struct Cnode
 {
     vector<Cnode *> ch;
     string heading;
     string tag;
 
-    Cnode(const string &hd)
+    Cnode(const string &hd) : heading(hd)
     {}
 } Cnode;
 
 typedef struct node
 {
-    int type;                // 节点代表的类型
+    int type;                           // 节点代表的类型
     vector<node *> ch;
-    /*
-     * 用来存放三个重要的属性, elem[0] 保存了要显示的内容
-     * elem[1] 保存了链接, elem[2] 则保存了 title
-     * */
-    string elem[3];
-
+    string elem[3];                     // 用来存放三个重要的属性, elem[0] 保存了要显示的内容
+    // elem[1] 保存了链接, elem[2] 则保存了 title
     node(int _type) : type(_type)
     {}
 } node;
 
-
-class TransformStruct
+class MarkdownTransform
 {
 private:
     node *root, *now;
@@ -111,111 +100,7 @@ private:
         return (v->type == href);
     }
 
-    // 换行
-    inline bool isCutline(char *src)
-    {
-        int cnt = 0;
-        char *ptr = src;
-        while (*ptr)
-        {
-            if (*ptr != ' ' && *ptr != '\t' && *ptr != '-')
-                return false;
-            if (*ptr == '-')
-                cnt++;
-            ptr++;
-        }
-        return (cnt >= 3);
-    }
-
-    // 生成段落
-    inline void mkpara(node *v)
-    {
-        if (v->ch.size() == 1u && v->ch.back()->type == paragraph)
-            return;
-        if (v->type == paragraph)
-            return;
-        if (v->type == nul)
-        {
-            v->type = paragraph;
-            return;
-        }
-        node *x = new node(paragraph);
-        x->ch = v->ch;
-        v->ch.clear();
-        v->ch.emplace_back(x);
-    }
-
-    // 解析空格和tab
-    inline pair<int, char *> start(char *src)
-    {
-        if ((int) strlen(src) == 0)
-            return make_pair(0, nullptr);
-        // 统计空格和tab数量
-        int cntSpace = 0, cntTab = 0;
-        // 第一个字符开始，遇到不是空或tab时立即停止
-        for (int i = 0; src[i] != '\0'; i++)
-        {
-            if (src[i] == ' ') cntSpace++;
-            else if (src[i] == '\t') cntTab++;
-            // 如果内容前有空格和 Tab，那么将其统一按 Tab 的个数处理,1个tab相当于4个空格
-            return make_pair(cntTab + cntSpace / 4, src + i);
-        }
-
-        return make_pair(0, nullptr);
-    }
-
-    /**
-     *
-     * 判断当前行类型
-     *
-     * */
-    inline pair<int, char *> judgeType(char *src)
-    {
-        char *ptr = src;
-        while (*ptr == '#') ptr++;
-        // 如果出现空格,说明是<h>标签
-        if (ptr - src > 0 && *ptr == ' ')
-            return make_pair(ptr - src + h1 - 1, ptr + 1);
-        ptr = src;
-        // 代码块
-        if (strncmp(ptr, "```", 3) == 0)
-            return make_pair(blockcode, ptr + 3);
-        // * + - ,并且紧跟空格,则是列表
-        if (strncmp(ptr, "- ", 2) == 0)
-            return make_pair(ul, ptr + 1);
-        // 引用
-        if (*ptr == '>' && (ptr[1] == ' '))
-            return make_pair(quote, ptr + 1);
-
-        // 数字并且紧跟 `.`,则是有序列表
-        char *ptr1 = ptr;
-        while (*ptr1 && (isdigit(*ptr1))) ptr1++;
-        if (ptr1 != ptr && *ptr1 == '.' && ptr1[1] == ' ')
-            return make_pair(ol, ptr1 + 1);
-        // 普通段落
-        return make_pair(paragraph, ptr);
-    }
-
-    /**
-     *
-     * 根据树深度寻找节点
-     * @param depth 树深度
-     * @return 找的节点指针
-     * */
-    inline node *findNode(int depth)
-    {
-        node *ptr = root;
-        while (!ptr->ch.empty() && depth != 0)
-        {
-            ptr = ptr->ch.back();
-            if (ptr->type == li)
-                depth--;
-        }
-        return ptr;
-    }
-
-    // 声明模板
-    // 销毁节点
+    // 递归销毁数节点
     template<typename T>
     void destroy(T *v)
     {
@@ -252,10 +137,9 @@ private:
             v->ch.back()->tag = "tag" + to_string(tag);
             return;
         }
+
         if (!n || v->ch.back()->heading.empty())
-        {
             v->ch.emplace_back(new Cnode(""));
-        }
         Cins(v->ch.back(), x - 1, hd, tag);
     }
 
@@ -264,44 +148,161 @@ private:
         if (v->type == paragraph && v->elem[0].empty() && v->ch.empty())
             return;
 
-        content += frontag[v->type];
+        content += frontTag[v->type];
         bool flag = true;
 
-        //标题，可以目录跳转
+        // 处理标题, 支持用目录进行跳转
         if (isHeading(v))
         {
             content += "id=\"" + v->elem[0] + "\">";
             flag = false;
         }
 
-        // 超链接
+        // 处理超链接
         if (isHref(v))
         {
             content += "<a href=\"" + v->elem[1] + "\" title=\"" + v->elem[2] + "\">" + v->elem[0] + "</a>";
             flag = false;
         }
 
-        // 图片
+        // 处理图片
         if (isImage(v))
         {
             content += "<img alt=\"" + v->elem[0] + "\" src=\"" + v->elem[1] + "\" title=\"" + v->elem[2] + "\" />";
             flag = false;
         }
 
+        // 如果上面三者都不是, 则直接添加内容
         if (flag)
         {
             content += v->elem[0];
             flag = false;
         }
 
-        // 遍历内容
-        for (int i = 0; i < (int) v->ch.size(); ++i)
-        {
+        // 递归遍历所有
+        for (int i = 0; i < (int) v->ch.size(); i++)
             dfs(v->ch[i]);
-        }
+
+        // 拼接为结束标签
         content += backTag[v->type];
     }
 
+    // 判断是否换行
+    inline bool isCutline(char *src)
+    {
+        int cnt = 0;
+        char *ptr = src;
+        while (*ptr)
+        {
+            // 如果不是 空格、tab、- 或 *，那么则不需要换行
+            if (*ptr != ' ' && *ptr != '\t' && *ptr != '-')
+                return false;
+            if (*ptr == '-')
+                cnt++;
+            ptr++;
+        }
+        // 如果出现 --- 则需要增加一个分割线, 这时需要换行
+        return (cnt >= 3);
+    }
+
+    // 生成段落
+    inline void mkpara(node *v)
+    {
+        if (v->ch.size() == 1u && v->ch.back()->type == paragraph)
+            return;
+        if (v->type == paragraph)
+            return;
+        if (v->type == nul)
+        {
+            v->type = paragraph;
+            return;
+        }
+        node *x = new node(paragraph);
+        x->ch = v->ch;
+        v->ch.clear();
+        v->ch.emplace_back(x);
+    }
+
+    // 开始解析一行中开始的空格和 Tab
+    // src: 源串
+    // 返回值: 由空格数和有内容处的 char* 指针组成的 std::pair
+    inline pair<int, char *> start(char *src)
+    {
+        // 如果该行内容为空，则直接返回
+        if ((int) strlen(src) == 0)
+            return make_pair(0, nullptr);
+        // 统计空格键和 Tab 键的个数
+        int cntspace = 0, cnttab = 0;
+        // 从该行的第一个字符读其, 统计空格键和 Tab 键,
+        // 当遇到不是空格和 Tab 时，立即停止
+        for (int i = 0; src[i] != '\0'; i++)
+        {
+            if (src[i] == ' ') cntspace++;
+            else if (src[i] == '\t') cnttab++;
+            // 如果内容前有空格和 Tab，那么将其统一按 Tab 的个数处理,
+            // 其中, 一个 Tab = 四个空格
+            return make_pair(cnttab + cntspace / 4, src + i);
+        }
+        return make_pair(0, nullptr);
+    }
+
+    // 判断当前行的类型
+    // src: 源串
+    // 返回值: 当前行的类型和除去行标志性关键字的正是内容的 char* 指针组成的 std::pair
+    inline pair<int, char *> JudgeType(char *src)
+    {
+        char *ptr = src;
+
+        // 跳过 `#`
+        while (*ptr == '#') ptr++;
+
+        // 如果出现空格, 则说明是 `<h>` 标签
+        if (ptr - src > 0 && *ptr == ' ')
+            return make_pair(ptr - src + h1 - 1, ptr + 1);
+
+        // 重置分析位置
+        ptr = src;
+
+        // 如果出现 ``` 则说明是代码块
+        if (strncmp(ptr, "```", 3) == 0)
+            return make_pair(blockcode, ptr + 3);
+
+        // 如果出现 * + -, 并且他们的下一个字符为空格，则说明是列表
+        if (strncmp(ptr, "- ", 2) == 0)
+            return make_pair(ul, ptr + 1);
+
+        // 如果出现 > 且下一个字符为空格，则说明是引用
+        if (*ptr == '>' && (ptr[1] == ' '))
+            return make_pair(quote, ptr + 1);
+
+        // 如果出现的是数字, 且下一个字符是 . 则说明是是有序列表
+        char *ptr1 = ptr;
+        while (*ptr1 && (isdigit(*ptr1))) ptr1++;
+        if (ptr1 != ptr && *ptr1 == '.' && ptr1[1] == ' ')
+            return make_pair(ol, ptr1 + 1);
+
+        // 否则，就是普通段落
+        return make_pair(paragraph, ptr);
+    }
+
+    // 给定树的深度寻找节点
+    // depth: 树的深度
+    // 返回值: 找到的节点指针
+    inline node *findnode(int depth)
+    {
+        node *ptr = root;
+        while (!ptr->ch.empty() && depth != 0)
+        {
+            ptr = ptr->ch.back();
+            if (ptr->type == li)
+                depth--;
+        }
+        return ptr;
+    }
+
+    // 向指定的节点中插入要处理的串
+    // v: 节点
+    // src: 要处理的串
     void insert(node *v, const string &src)
     {
         int n = (int) src.size();
@@ -316,17 +317,20 @@ private:
             char ch = src[i];
             if (ch == '\\')
             {
-                ch = src[i];
+                ch = src[++i];
                 v->ch.back()->elem[0] += string(1, ch);
                 continue;
             }
+
+            // 处理行内代码
             if (ch == '`' && !inautolink)
             {
                 incode ? v->ch.emplace_back(new node(nul)) : v->ch.emplace_back(new node(code));
                 incode = !incode;
                 continue;
             }
-            // 加粗
+
+            // 处理加粗
             if (ch == '*' && (i < n - 1 && (src[i + 1] == '*')) && !incode && !inautolink)
             {
                 ++i;
@@ -341,52 +345,41 @@ private:
                 continue;
             }
 
-            // 图片
-            if (ch == '!' && (i < n - 1 && src[i + 1] == '[') && !incode && !instrong && !inem && !inautolink)
+            // 处理图片
+            if (ch == '!' && (i < n - 1 && src[i + 1] == '[')
+                && !incode && !instrong && !inem && !inautolink)
             {
                 v->ch.emplace_back(new node(image));
-                for (i += 2; i < n - 1 && src[i + 1] != '['; i++)
-                {
+                for (i += 2; i < n - 1 && src[i] != ']'; i++)
                     v->ch.back()->elem[0] += string(1, src[i]);
-                }
-                i++;
-                for (i++; i < n - 1 && src[i] != ' '; i++)
-                    v->ch.back()->elem[1] += string(1, src[i]);
-
-                if (src[i] != ')')
-                {
-                    for (i++; i < n - 1 && src[i] != ')'; i++)
-                    {
-                        if (src[i] != '"')
-                            v->ch.back()->elem[2] += string(1, src[i]);
-                    }
-                }
-                v->ch.emplace_back(new node(nul));
-                continue;
-            }
-
-            // 超链接
-            if (ch == '[' && !incode && !instrong && !inem && !inautolink)
-            {
-                v->ch.emplace_back(new node(href));
-                for (i++; i < n - 1 && src[i]; i++)
-                {
-                    v->ch.back()->elem[0] += string(1, src[i]);
-                }
                 i++;
                 for (i++; i < n - 1 && src[i] != ' ' && src[i] != ')'; i++)
                     v->ch.back()->elem[1] += string(1, src[i]);
                 if (src[i] != ')')
-                {
                     for (i++; i < n - 1 && src[i] != ')'; i++)
-                    {
                         if (src[i] != '"')
                             v->ch.back()->elem[2] += string(1, src[i]);
-                    }
-                }
                 v->ch.emplace_back(new node(nul));
                 continue;
             }
+
+            // 处理超链接
+            if (ch == '[' && !incode && !instrong && !inem && !inautolink)
+            {
+                v->ch.emplace_back(new node(href));
+                for (i++; i < n - 1 && src[i] != ']'; i++)
+                    v->ch.back()->elem[0] += string(1, src[i]);
+                i++;
+                for (i++; i < n - 1 && src[i] != ' ' && src[i] != ')'; i++)
+                    v->ch.back()->elem[1] += string(1, src[i]);
+                if (src[i] != ')')
+                    for (i++; i < n - 1 && src[i] != ')'; i++)
+                        if (src[i] != '"')
+                            v->ch.back()->elem[2] += string(1, src[i]);
+                v->ch.emplace_back(new node(nul));
+                continue;
+            }
+
             v->ch.back()->elem[0] += string(1, ch);
             if (inautolink) v->ch.back()->elem[1] += string(1, ch);
         }
@@ -397,20 +390,22 @@ private:
 
 public:
     // 构造函数
-    TransformStruct(const std::string &fileName)
+    MarkdownTransform(const std::string &filename)
     {
         Croot = new Cnode("");
         root = new node(nul);
         now = root;
-        ifstream fin(fileName);
+
+        std::ifstream fin(filename);
 
         bool newpara = false;
         bool inblock = false;
-
         while (!fin.eof())
         {
+            // 从文件中获取一行
             fin.getline(s, maxLength);
 
+            // 处理不在代码块且需要换行的情况
             if (!inblock && isCutline(s))
             {
                 now = root;
@@ -419,8 +414,11 @@ public:
                 continue;
             }
 
-            pair<int, char *> ps = start(s);
-            // 如果不在代码块中，且没有统计到空格和tab中，则直接读取下一行
+            // std::pair 实质上是一个结构体, 可以将两个数据组合成一个数据
+            // 计算一行中开始的空格和 Tab 数
+            std::pair<int, char *> ps = start(s);
+
+            // 如果没有位于代码块中, 且没有统计到空格和 Tab, 则直接读取下一行
             if (!inblock && ps.second == nullptr)
             {
                 now = root;
@@ -428,27 +426,31 @@ public:
                 continue;
             }
 
-            pair<int, char *> tj = judgeType(ps.second);
+            // 分析该行文本的类型
+            std::pair<int, char *> tj = JudgeType(ps.second);
 
+            // 如果是代码块类型
             if (tj.first == blockcode)
             {
-                // push一个空类型的节点
+                // 如果位于代码块中, 则 push 一个空类型的节点
                 inblock ? now->ch.emplace_back(new node(nul)) : now->ch.emplace_back(new node(blockcode));
                 inblock = !inblock;
                 continue;
             }
 
+            // 如果在代码块中, 直接将内容拼接到当前节点中
             if (inblock)
             {
                 now->ch.back()->elem[0] += string(s) + '\n';
                 continue;
             }
 
+            // 如果是普通段落
             if (tj.first == paragraph)
             {
                 if (now == root)
                 {
-                    now = findNode(ps.first);
+                    now = findnode(ps.first);
                     now->ch.emplace_back(new node(paragraph));
                     now = now->ch.back();
                 }
@@ -467,17 +469,18 @@ public:
                 }
                 if (flag)
                 {
-                    now->ch.push_back(new node(nul));
+                    now->ch.emplace_back(new node(paragraph));
                     now = now->ch.back();
                 }
-                now->ch.push_back(new node(nul));
+                now->ch.emplace_back(new node(nul));
                 insert(now->ch.back(), string(tj.second));
                 newpara = false;
                 continue;
             }
-            now = findNode(ps.first);
 
-            // 标题行，则插入属性tag
+            now = findnode(ps.first);
+
+            // 如果是标题行, 则向其标签中插入属性 tag
             if (tj.first >= h1 && tj.first <= h6)
             {
                 now->ch.emplace_back(new node(tj.first));
@@ -486,11 +489,13 @@ public:
                 Cins(Croot, tj.first - h1 + 1, string(tj.second), cntTag);
             }
 
-            // 无序列表
+            // 如果是无序列表
             if (tj.first == ul)
             {
-                if (now->ch.empty() || now->ch.back()->type != nul)
-                    now->ch.emplace_back(new node(nul));
+                if (now->ch.empty() || now->ch.back()->type != ul)
+                {
+                    now->ch.emplace_back(new node(ul));
+                }
                 now = now->ch.back();
                 bool flag = false;
                 if (newpara && !now->ch.empty())
@@ -513,11 +518,13 @@ public:
                 insert(now, string(tj.second));
             }
 
-            // 有序列表
+            // 如果是有序列表
             if (tj.first == ol)
             {
                 if (now->ch.empty() || now->ch.back()->type != ol)
+                {
                     now->ch.emplace_back(new node(ol));
+                }
                 now = now->ch.back();
                 bool flag = false;
                 if (newpara && !now->ch.empty())
@@ -540,42 +547,49 @@ public:
                 insert(now, string(tj.second));
             }
 
-            // 引用
+            // 如果是引用
             if (tj.first == quote)
             {
                 if (now->ch.empty() || now->ch.back()->type != quote)
+                {
                     now->ch.emplace_back(new node(quote));
+                }
                 now = now->ch.back();
                 if (newpara || now->ch.empty()) now->ch.emplace_back(new node(paragraph));
                 insert(now->ch.back(), string(tj.second));
             }
+
             newpara = false;
 
-            fin.close();
-            dfs(root);
-
-            TOC += "<ul>";
-            for (int i = 0; (int) Croot->ch.size(); i++)
-                Cdfs(Croot->ch[i], to_string(i + 1) + ".");
-            TOC += "</uk>";
         }
+
+        // 文件读取分析完毕
+        fin.close();
+
+        // 深入优先遍历整个语法树
+        dfs(root);
+
+        // 构造目录
+        TOC += "<ul>";
+        for (int i = 0; i < (int) Croot->ch.size(); i++)
+            Cdfs(Croot->ch[i], to_string(i + 1) + ".");
+        TOC += "</ul>";
     }
 
-    // 获取Markdown目录
+    // 获得 Markdown 目录
     string getTableOfContents()
     { return TOC; }
 
-    // 获取Markdown内容
+    // 获得 Markdown 内容
     string getContents()
     { return content; }
 
     // 析构函数
-    ~TransformStruct()
+    ~MarkdownTransform()
     {
         destroy<node>(root);
         destroy<Cnode>(Croot);
     }
 };
-
 
 #endif

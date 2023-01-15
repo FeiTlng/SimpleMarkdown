@@ -8,11 +8,12 @@ int main()
 {
 
     // 加载Markdown文件
-    TransformStruct transformStruct("/Users/yjd/Documents/C++/SimpleMarkdown/test.md");
+    MarkdownTransform transformStruct("/Users/yjd/Documents/C++/SimpleMarkdown/test.md");
     string table = transformStruct.getTableOfContents();
-    cout<<"table:"<<table<<endl;
+    cout << "table:" << table << endl;
 
     string contents = transformStruct.getContents();
+    cout << "contents:" << contents << endl;
 
     std::string head = "<!DOCTYPE html><html><head>"
                        "<meta charset=\"utf-8\">"
@@ -21,7 +22,7 @@ int main()
                        "</head><body><article class=\"markdown-body\">";
     string end = "</article></body></html>";
     ofstream out;
-    out.open("index.html");
+    out.open("/Users/yjd/Documents/C++/SimpleMarkdown/output/index.html");
     out << head + table + contents + end;
     out.close();
     return 0;
